@@ -2,8 +2,11 @@ package main
 
 import (
 	"fmt"
+	"io"
+	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/PuerkitoBio/goquery"
 )
@@ -114,4 +117,39 @@ func getImagesFromHTML(htmlBody string, baseURL *url.URL) ([]string, error) {
 	})
 
 	return urls, nil
+}
+
+func getHTML(rawURL string) (string, error) {
+	req, err := http.NewRequest("GET", rawURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate GET request: %v", err)
+	}
+
+	req.Header.Set("User-Agent", "BootCrawler/1.0")
+
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		return "", fmt.Errorf("bad status code (not OK): %v", resp.StatusCode)
+	}
+
+	contentType := resp.Header.Get("Content-Type")
+	if !strings.HasPrefix(strings.ToLower(contentType), "text/html") {
+		return "", fmt.Errorf("expected text/html, got: %v", contentType)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("unable to read response body: %v", err)
+	}
+
+	return string(body), nil
 }
